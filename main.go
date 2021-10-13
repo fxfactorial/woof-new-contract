@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"log"
 	"os"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -13,11 +14,14 @@ import (
 	"github.com/getlantern/systray"
 	"github.com/getlantern/systray/example/icon"
 	"github.com/pkg/browser"
+	"github.com/pkg/errors"
 )
+
+const t = "ws://localhost:8545"
 
 var (
 	clientDial = flag.String(
-		"client_dial", "ws://localhost:8545", "could be websocket or IPC",
+		"client_dial", t, "could be websocket or IPC",
 	)
 )
 
@@ -34,8 +38,8 @@ func onExit() {
 	fmt.Println("exit exit")
 }
 
-func etherscan(h common.Hash) string {
-	return "https://etherscan.io/tx/" + h.Hex()
+func kovanEtherscan(h common.Hash) string {
+	return "https://kovan.etherscan.io/tx/" + h.Hex()
 }
 
 func program() error {
@@ -53,46 +57,54 @@ func program() error {
 		return err
 	}
 
+	errCh := make(chan error)
+	_ = errCh
+	// come back to it , error thread reader ?,
+	// does systray need to be on mainthread?
+
 	go func() {
 		for {
 			select {
-			case <-sub.Err():
+			case e := <-sub.Err():
+				log.Fatal(e)
 				// deal with it later
 			case h := <-ch:
-				fmt.Println(h)
-				//
-			}
-		}
-	}()
+				block, err := handle.BlockByNumber(context.Background(), h.Number)
+				if err != nil {
+					log.Fatal(errors.Wrapf(err, "block by hash issue"))
+				}
 
-	go func() {
-		err := beeep.Notify(
-			"new ethereum contract made", "check menu", "information.png",
-		)
+				for _, tx := range block.Transactions() {
+					// new contract?
+					if t := tx.To(); t == nil && len(tx.Data()) >= 4 {
+						if err := beeep.Notify(
+							"new ethereum contract made", "check menu", "information.png",
+						); err != nil {
+							log.Fatal(err)
+						}
 
-		systray.AddSeparator()
-		mQuit := systray.AddMenuItem("Addr", "new contract link")
-		ch := make(chan struct{})
-		mQuit.ClickedCh = ch
+						systray.AddSeparator()
+						newContract := systray.AddMenuItem(
+							fmt.Sprintf("at block %d", h.Number), "new contract link",
+						)
 
-		go func() {
-			for range ch {
-				if err := browser.OpenURL(
-					"https://etherscan.io/tx/0x9a92071acb900a6a759c52d8086b2cd1252ac6a26f2b195aa8d5bc496e692349",
-				); err != nil {
-					fmt.Println("whatever", err)
+						ch := make(chan struct{})
+						newContract.ClickedCh = ch
+						hash := tx.Hash()
+						go func() {
+							for range newContract.ClickedCh {
+								if err := browser.OpenURL(kovanEtherscan(hash)); err != nil {
+									log.Fatal(errors.Wrapf(err, "browser fucked up?"))
+								}
+							}
+						}()
+					}
 				}
 			}
-		}()
-		_ = mQuit
-		if err != nil {
-			panic(err)
 		}
-
 	}()
 
 	systray.Run(onReady, onExit)
-
 	return nil
 }
 

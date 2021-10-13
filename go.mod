@@ -7,6 +7,7 @@ require (
 	github.com/gen2brain/beeep v0.0.0-20210529141713-5586760f0cc1
 	github.com/getlantern/systray v1.1.0
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8
+	github.com/pkg/errors v0.9.1
 )
 
 require (
