@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
-	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/gen2brain/beeep"
 	"github.com/getlantern/systray"
@@ -22,7 +24,7 @@ var (
 func onReady() {
 	systray.SetIcon(icon.Data)
 	systray.SetTitle("Ethereum Contract Creation")
-	systray.SetTooltip("Pretty awesome超级棒")
+	systray.SetTooltip("new contract creations")
 	mQuit := systray.AddMenuItem("Quit", "Quit the whole app")
 	// Sets the icon of a menu item. Only available on Mac and Windows.
 	mQuit.SetIcon(icon.Data)
@@ -30,14 +32,40 @@ func onReady() {
 
 func onExit() {
 	fmt.Println("exit exit")
-	// clean up here
+}
+
+func etherscan(h common.Hash) string {
+	return "https://etherscan.io/tx/" + h.Hex()
 }
 
 func program() error {
 	flag.Parse()
 
+	handle, err := ethclient.Dial(*clientDial)
+	if err != nil {
+		return err
+	}
+
+	ch := make(chan *types.Header)
+	sub, err := handle.SubscribeNewHead(context.Background(), ch)
+
+	if err != nil {
+		return err
+	}
+
 	go func() {
-		time.Sleep(time.Second * 1)
+		for {
+			select {
+			case <-sub.Err():
+				// deal with it later
+			case h := <-ch:
+				fmt.Println(h)
+				//
+			}
+		}
+	}()
+
+	go func() {
 		err := beeep.Notify(
 			"new ethereum contract made", "check menu", "information.png",
 		)
@@ -46,6 +74,7 @@ func program() error {
 		mQuit := systray.AddMenuItem("Addr", "new contract link")
 		ch := make(chan struct{})
 		mQuit.ClickedCh = ch
+
 		go func() {
 			for range ch {
 				if err := browser.OpenURL(
@@ -63,14 +92,7 @@ func program() error {
 	}()
 
 	systray.Run(onReady, onExit)
-	fmt.Println("after systray worked")
-	handle, err := ethclient.Dial(*clientDial)
 
-	_ = handle
-
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
