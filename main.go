@@ -38,7 +38,6 @@ func program() error {
 
 	go func() {
 		time.Sleep(time.Second * 1)
-		fmt.Println("speak speak")
 		err := beeep.Notify(
 			"new ethereum contract made", "check menu", "information.png",
 		)
@@ -49,7 +48,6 @@ func program() error {
 		mQuit.ClickedCh = ch
 		go func() {
 			for range ch {
-				fmt.Println("click happened!")
 				if err := browser.OpenURL(
 					"https://etherscan.io/tx/0x9a92071acb900a6a759c52d8086b2cd1252ac6a26f2b195aa8d5bc496e692349",
 				); err != nil {
